@@ -38,7 +38,7 @@ export const handler: APIGatewayProxyHandler = async (
   context: Context
 ): Promise<APIGatewayProxyResult> => {
   try {
-    if (MOCK_PRODUCTS.length === 0) {
+    if (!MOCK_PRODUCTS || MOCK_PRODUCTS.length === 0) {
       return {
         statusCode: 404,
         headers: defaultHeaders,
