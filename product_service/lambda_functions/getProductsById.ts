@@ -4,39 +4,30 @@ import {
   APIGatewayProxyResult,
   APIGatewayEvent
 } from 'aws-lambda';
-import { IProduct } from './product.interface';
+import { DynamoDB } from 'aws-sdk';
+import { IProduct, IStock } from './product.interface';
 
-// Mock data
-const MOCK_PRODUCTS: IProduct[] = [
-  {
-    id: "1",
-    title: "Product 1",
-    description: "Product 1 description",
-    price: 89.99
-  },
-  {
-    id: "2",
-    title: "Product 2",
-    description: "Product 2 description",
-    price: 110.50
-  },
-  {
-    id: "3",
-    title: "Product 3",
-    description: "Product 3 description",
-    price: 249.99
-  }
-];
 
 const defaultHeaders = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
 };
 
+const PRODUCTS_TABLE = process.env.PRODUCTS_TABLE;
+const STOCKS_TABLE = process.env.STOCKS_TABLE;
+const REGION = process.env.REGION;
+
+const dynamoDb = new DynamoDB.DocumentClient({
+  region: REGION,
+});
+
 export const handler: APIGatewayProxyHandler = async (
   event: APIGatewayEvent,
   context: Context
 ): Promise<APIGatewayProxyResult> => {
+  console.log(`Event: ${JSON.stringify(event)}`);
+  console.log(`Using tables - Products: ${PRODUCTS_TABLE}, Stocks: ${STOCKS_TABLE}, Region: ${REGION}`);
+
   try {
     const productId = event.pathParameters?.id;
 
@@ -48,7 +39,12 @@ export const handler: APIGatewayProxyHandler = async (
       };
     }
 
-    const product = MOCK_PRODUCTS.find(p => p.id === productId);
+    const productResult = await dynamoDb.get({
+      TableName: PRODUCTS_TABLE,
+      Key: { id: productId }
+    }).promise();
+
+    const product = productResult.Item as IProduct;
 
     if (!product) {
       return {
@@ -58,17 +54,32 @@ export const handler: APIGatewayProxyHandler = async (
       };
     }
 
+    const stockResult = await dynamoDb.get({
+      TableName: STOCKS_TABLE,
+      Key: { product_id: productId }
+    }).promise();
+
+    const stock = stockResult.Item as IStock;
+
+    const productWithStock = {
+      ...product,
+      count: stock ? stock.count : 0
+    };
+
     return {
       statusCode: 200,
       headers: defaultHeaders,
-      body: JSON.stringify(product),
+      body: JSON.stringify(productWithStock),
     };
   } catch (error) {
-    console.error('Error processing request:', error);
+    console.error('Error fetching product from DynamoDB:', error);
     return {
       statusCode: 500,
       headers: defaultHeaders,
-      body: JSON.stringify({ message: 'Internal server error' }),
+      body: JSON.stringify({
+        message: 'Internal server error',
+        error: error.message
+      }),
     };
   }
 };
