@@ -76,6 +76,20 @@ export class ProductServiceStack extends Stack {
       value: getProductsByIdFunction.functionName,
     });
 
+    const createProductFunction = new lambda_nodejs.NodejsFunction(this, 'CreateProductHandler', {
+      entry: './lambda_functions/createProduct.ts',
+      handler: 'handler',
+      ...nodejsFunctionProps,
+    });
+
+    productsTable.grantWriteData(createProductFunction);
+    stocksTable.grantWriteData(createProductFunction);
+
+    new CfnOutput(this, 'createProductFunction', {
+      description: 'Lambda function used to create new products',
+      value: createProductFunction.functionName,
+    });
+
     const api = new apigateway.RestApi(this, 'products-api', {
       deployOptions: {
         stageName: config.api.stageName,
@@ -93,6 +107,8 @@ export class ProductServiceStack extends Stack {
 
     const products = api.root.addResource('products');
     products.addMethod('GET', new apigateway.LambdaIntegration(getProductsListFunction));
+
+    products.addMethod('POST', new apigateway.LambdaIntegration(createProductFunction));
 
     const product = products.addResource('{id}');
     product.addMethod('GET', new apigateway.LambdaIntegration(getProductsByIdFunction));
